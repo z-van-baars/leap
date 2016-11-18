@@ -8,7 +8,7 @@ class GameTile(object):
         self.settlement = None
         self.train_station = None
         self.visitors = 0
-        self.cost = 1000
+        self.cost = 10
         self.destinations = {}
 
     def __lt__(self, other):

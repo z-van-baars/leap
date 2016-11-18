@@ -61,7 +61,7 @@ ROAD_THRESHOLD = 10
 STATION_THRESHOLD = 10
 MIN_STATION_DISTANCE = 30
 RAIL_CONNECTION_THRESHOLD = 3
-NUMBER_OF_AGENTS = 5
+NUMBER_OF_AGENTS = 20
 NUMBER_OF_MARKETS = 1
 
 
@@ -373,13 +373,16 @@ class GameMap(object):
             self.game_tile_rows.append(this_row)
 
     def set_costs(self, road_group, rail_group):
-        for rail in rail_group.rails:
+        for rail in rail_group.members:
             for tile in rail.path.steps:
                 game_tile = self.game_tile_rows[tile.row][tile.column]
                 game_tile.cost = 1
-        for road in road_group.roads:
+        for road in road_group.members:
             game_tile = self.game_tile_rows[road.y][road.x]
-            game_tile.cost -= 900
+            if game_tile.cost > 999:
+                game_tile.cost -= 999
+            print("Making the road tile cheaper!")
+            print(game_tile.cost)
 
 
 class Background(pygame.sprite.Sprite):
@@ -432,29 +435,30 @@ class RailGroup(ObjectGroup):
 
 class RoadGroup(ObjectGroup):
     def __init__(self, width, height):
-        pass
+        super().__init__(width, height)
 
     def new_road(self, tile):
         new_road = Road(tile.column, tile.row)
         tile.road = new_road
-        self.roads.append(new_road)
-        self.road_layer.update(new_road)
+        tile.cost = 1
+        self.members.append(new_road)
+        self.display_layer.update(new_road)
 
 
 class SettlementGroup(ObjectGroup):
     def __init__(self, width, height):
-        pass
+        super().__init__(width, height)
 
     def new_settlement(self, tile):
         new_settlement = Settlement(tile.column, tile.row)
         tile.settlement = new_settlement
         self.members.append(new_settlement)
-        self.member_layer.update(new_settlement)
+        self.display_layer.update(new_settlement)
 
 
-class TrainStationGroup(object):
+class TrainStationGroup(ObjectGroup):
     def __init__(self, width, height):
-        pass
+        super().__init__(width, height)
 
     def new_station(self, tile):
         closest_station = 10000
