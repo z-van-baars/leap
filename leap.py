@@ -53,14 +53,18 @@ RAIL_CONNECTION_THRESHOLD: How many times a visiter must visit a station after p
 another station on the same trip before a rail link is constructed between the two.  A lower
 number encourages branching.
 
+TRIPS_FOR_NEW_AGENT: Number of trips that must be completed in a market's radius before a new
+Agent is produced at the market.
+
 NUMBER_OF_AGENTS: Number of Agents to generate at runtime
 
 NUMBER_OF_MARKETS: Number of Markets to generate at runtime"""
 
-ROAD_THRESHOLD = 10
+ROAD_THRESHOLD = 30
 STATION_THRESHOLD = 10
 MIN_STATION_DISTANCE = 30
 RAIL_CONNECTION_THRESHOLD = 3
+TRIPS_FOR_NEW_AGENT = 50
 NUMBER_OF_AGENTS = 20
 NUMBER_OF_MARKETS = 1
 
@@ -147,9 +151,11 @@ class Agent(object):
                 road_group.new_road(tile)
 
     def move(self, map_object):
-        new_tile = self.path.steps.pop(0)
-        self.x = new_tile.column
-        self.y = new_tile.row
+        # new_tile = self.path.steps.pop(0)
+        # self.x = new_tile.column
+        # self.y = new_tile.row
+        self.x += self.vector[0]
+        self.y += self.vector[1]
         self.clear_vector()
 
     def visit(self, map_object, station_group, rail_group, road_group):
@@ -236,8 +242,8 @@ class Agent(object):
         return aggregate_path
 
     def check_target(self, map_object, settlement_group):
-        if len(self.path.steps) < 1:
-            assert (round(self.x), round(self.y)) == self.target
+        if (round(self.x), round(self.y)) == self.target:
+            self.target_market.trips_completed += 1
             self.clear_target()
             self.path = None
             self.settle(settlement_group, get_tile(map_object, self.x, self.y))
@@ -246,24 +252,12 @@ class Agent(object):
         if not self.target or not self.target_market:
             self.target = self.get_target(map_object, markets)
             # self.plot_course(map_object, road_group, station_group, rail_group)
-            self.path = get_path((self.x, self.y), map_object, self.target)
-            assert self.path
-            assert self.path.steps
-        assert self.target_market and self.target
-        assert self.path
-        assert self.path.steps
+            # self.path = get_path((self.x, self.y), map_object, self.target)
         self.pave(map_object, road_group)
-        assert self.path
-        assert self.path.steps
-        assert (self.path.steps[0].column, self.path.steps[0].row) != (self.x, self.y)
-        self.vector = self.set_vector(self.path.steps[0].column, self.path.steps[0].row, self.x, self.y)
-        assert self.path
-        assert self.path.steps
+        self.vector = self.set_vector(self.target[0], self.target[1], self.x, self.y)
         self.move(map_object)
         # self.visit(map_object, station_group, rail_group, road_group)
         self.check_target(map_object, settlement_group)
-        if self.path:
-            assert self.path.steps
 
 
 class Market(object):
@@ -272,8 +266,15 @@ class Market(object):
         self.sprite.image = pygame.Surface([1, 1])
         self.sprite.image.fill(colors["Market Red"])
         self.sprite.image = self.sprite.image.convert_alpha()
+        self.trips_completed = 0
         self.x = x
         self.y = y
+
+    def check_trips(self, agent_group):
+        if self.trips_completed >= TRIPS_FOR_NEW_AGENT:
+            agent_group.new_agent(self.x, self.y)
+            self.trips_completed -= TRIPS_FOR_NEW_AGENT
+
 
 
 class Settlement(object):
@@ -431,6 +432,14 @@ class RailGroup(ObjectGroup):
         new_rail = Rail(self.width, self.height, a, b, path)
         self.members.append(new_rail)
         self.display_layer.update(new_rail)
+
+
+class AgentGroup(ObjectGroup):
+    def __init__(self, width, height):
+        super().__init__(width, height)
+
+    def new_agent(self, x, y):
+        self.members.append(Agent(x, y))
 
 
 class RoadGroup(ObjectGroup):
@@ -604,17 +613,18 @@ def generate_random_markets(screen_width, screen_height, markets, number_of_mark
                 placed = True
 
 
-def generate_random_agents(screen_width, screen_height, agents, number_of_agents):
+def generate_random_agents(screen_width, screen_height, agent_group, number_of_agents):
     for z in range(number_of_agents):
         x = random.randint(1, screen_width - 1)
         y = random.randint(1, screen_height - 1)
-        new_agent = Agent(x, y)
-        agents.append(new_agent)
+        agent_group.new_agent(x, y)
 
 
-def tick_processing(map_object, settlement_group, station_group, road_group, rail_group, markets, agents):
-    for each in agents:
+def tick_processing(map_object, settlement_group, station_group, road_group, rail_group, markets, agent_group):
+    for each in agent_group.members:
         each.tick_cycle(map_object, markets, settlement_group, road_group, station_group, rail_group)
+    for each in markets:
+        each.check_trips(agent_group)
 
 
 def c_key(bools):
@@ -675,13 +685,13 @@ def main():
     background = Background(screen_width, screen_height)
     settlement_group = SettlementGroup(screen_width, screen_height)
     road_group = RoadGroup(screen_width, screen_height)
-    agents = []
+    agent_group = AgentGroup(screen_width, screen_height)
     markets = []
     station_group = TrainStationGroup(screen_width, screen_height)
     rail_group = RailGroup(screen_width, screen_height)
 
     generate_random_markets(screen_width, screen_height, markets, NUMBER_OF_MARKETS)
-    generate_random_agents(screen_width, screen_height, agents, NUMBER_OF_AGENTS)
+    generate_random_agents(screen_width, screen_height, agent_group, NUMBER_OF_AGENTS)
 
     bools = {"Draw Agents": True,
              "Draw Markets": True,
@@ -694,7 +704,7 @@ def main():
                       "Roads": road_group.display_layer,
                       "Rails": rail_group.display_layer,
                       "Train Stations": station_group.members,
-                      "Agents": agents,
+                      "Agents": agent_group.members,
                       "Markets": markets}
 
     while True:
@@ -708,12 +718,12 @@ def main():
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_handler(mouse_pos, event, markets)
 
-        tick_processing(game_map, settlement_group, station_group, road_group, rail_group, markets, agents)
+        tick_processing(game_map, settlement_group, station_group, road_group, rail_group, markets, agent_group)
         draw_to_screen(screen, visual_objects, bools)
         clock.tick(60)
         if fps != round(clock.get_fps()):
             fps = round(clock.get_fps())
-            print("FPS: {0}".format(fps))
+            print("FPS: {0}  Agents: {1}".format(fps, len(agent_group.members)))
 
 
 main()
