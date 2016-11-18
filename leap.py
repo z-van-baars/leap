@@ -19,8 +19,8 @@ colors = {"Key": (255, 0, 128),
           # "Road 2": (255, 255, 255),
           # "Road 3": (255, 255, 255),
           "Train Station": (217, 72, 214),
-          "Rail": (23, 23, 41),
-          "Old Rail": (255, 105, 46),
+          "Subtle Rail": (23, 23, 41),
+          "Rail": (255, 105, 46),
           "Settled 1": (76, 58, 74),
           "Settled 2": (182, 153, 119),
           "Settled 3": (231, 217, 154),
@@ -39,10 +39,30 @@ road_colors = {1: "Road 1",
                2: "Road 2",
                3: "Road 3"}
 
-road_threshold = 10
-station_threshold = 10
-min_station_distance = 30
-connection_threshold = 3
+
+# Constant Parameters
+"""ROAD_THRESHOLD: Higher number means more visitors are required before a tile becomes a road
+and is eligible for upgrades
+
+STATION_THRESHOLD: Same as road threshold but for train station objects instead of road tiles
+
+Min_STATION_DISTANCE: For a new train station to generate, the new station must be at least
+this many tiles away from any existing stations.  Prevents station redundancy in market radii
+
+RAIL_CONNECTION_THRESHOLD: How many times a visiter must visit a station after passing through
+another station on the same trip before a rail link is constructed between the two.  A lower
+number encourages branching.
+
+NUMBER_OF_AGENTS: Number of Agents to generate at runtime
+
+NUMBER_OF_MARKETS: Number of Markets to generate at runtime"""
+
+ROAD_THRESHOLD = 10
+STATION_THRESHOLD = 10
+MIN_STATION_DISTANCE = 30
+RAIL_CONNECTION_THRESHOLD = 3
+NUMBER_OF_AGENTS = 5
+NUMBER_OF_MARKETS = 1
 
 
 class Agent(object):
@@ -112,17 +132,17 @@ class Agent(object):
     def settle(self, settlement_group, tile):
         if tile.settlement:
             tile.settlement.grow()
-            settlement_group.settlement_layer.update(tile.settlement)
+            settlement_group.display_layer.update(tile.settlement)
         else:
             settlement_group.new_settlement(tile)
 
     def pave(self, map_object, road_group):
         tile = get_tile(map_object, self.x, self.y)
         tile.visitors += 1
-        if tile.visitors > road_threshold:
+        if tile.visitors > ROAD_THRESHOLD:
             if tile.road:
                 tile.road.grow()
-                road_group.road_layer.update(tile.road)
+                road_group.display_layer.update(tile.road)
             else:
                 road_group.new_road(tile)
 
@@ -148,12 +168,12 @@ class Agent(object):
             self.stations_visited_this_trip.append(tile.train_station)
             tile.train_station.connection_check(map_object, rail_group)
             map_object.set_costs(road_group, rail_group)
-        if tile.visitors > station_threshold and not tile.train_station:
+        if tile.visitors > STATION_THRESHOLD and not tile.train_station:
             station_group.new_station(tile)
 
     def find_closest_station(self, target, station_group):
         closest_station = (None, None)
-        for each in station_group.stations:
+        for each in station_group.members:
             distance_from_target = distance(self.target[0], self.target[1], each.x, each.y)
             if not closest_station[0]:
                 closest_station = (each, distance_from_target)
@@ -314,7 +334,7 @@ class TrainStation(object):
 
     def connection_check(self, map_object, rail_group):
         for each in self.passed_through:
-            if self.passed_through[each] > connection_threshold and each not in self.connections:
+            if self.passed_through[each] > RAIL_CONNECTION_THRESHOLD and each not in self.connections:
                 self.add_connection(map_object, rail_group, each)
                 each.add_connection(map_object, rail_group, self)
 
@@ -391,23 +411,28 @@ class RailLayer(ObjectLayer):
         self.sprite.image.blit(rail.sprite.image, [0, 0])
 
 
-class RailGroup(object):
+class ObjectGroup(object):
     def __init__(self, width, height):
-        self.rails = []
+        self.members = []
         self.width = width
         self.height = height
-        self.rail_layer = RailLayer(width, height)
+        self.display_layer = ObjectLayer(width, height)
+
+
+class RailGroup(ObjectGroup):
+    def __init__(self, width, height):
+        super().__init__(width, height)
+        self.display_layer = RailLayer(width, height)
 
     def new_rail(self, a, b, path):
         new_rail = Rail(self.width, self.height, a, b, path)
-        self.rails.append(new_rail)
-        self.rail_layer.update(new_rail)
+        self.members.append(new_rail)
+        self.display_layer.update(new_rail)
 
 
-class RoadGroup(object):
+class RoadGroup(ObjectGroup):
     def __init__(self, width, height):
-        self.roads = []
-        self.road_layer = ObjectLayer(width, height)
+        pass
 
     def new_road(self, tile):
         new_road = Road(tile.column, tile.row)
@@ -416,32 +441,31 @@ class RoadGroup(object):
         self.road_layer.update(new_road)
 
 
-class SettlementGroup(object):
+class SettlementGroup(ObjectGroup):
     def __init__(self, width, height):
-        self.settlements = []
-        self.settlement_layer = ObjectLayer(width, height)
+        pass
 
     def new_settlement(self, tile):
         new_settlement = Settlement(tile.column, tile.row)
         tile.settlement = new_settlement
-        self.settlements.append(new_settlement)
-        self.settlement_layer.update(new_settlement)
+        self.members.append(new_settlement)
+        self.member_layer.update(new_settlement)
 
 
 class TrainStationGroup(object):
     def __init__(self, width, height):
-        self.stations = []
+        pass
 
     def new_station(self, tile):
         closest_station = 10000
-        for each in self.stations:
+        for each in self.members:
             station_distance = distance(tile.column, tile.row, each.x, each.y)
             if station_distance < closest_station:
                 closest_station = station_distance
-        if closest_station > min_station_distance:
+        if closest_station >= MIN_STATION_DISTANCE:
             new_station = TrainStation(tile.column, tile.row)
             tile.train_station = new_station
-            self.stations.append(new_station)
+            self.members.append(new_station)
 
 
 def distance(a, b, x, y):
@@ -652,8 +676,8 @@ def main():
     station_group = TrainStationGroup(screen_width, screen_height)
     rail_group = RailGroup(screen_width, screen_height)
 
-    generate_random_markets(screen_width, screen_height, markets, 1)
-    generate_random_agents(screen_width, screen_height, agents, 20)
+    generate_random_markets(screen_width, screen_height, markets, NUMBER_OF_MARKETS)
+    generate_random_agents(screen_width, screen_height, agents, NUMBER_OF_AGENTS)
 
     bools = {"Draw Agents": True,
              "Draw Markets": True,
@@ -662,10 +686,10 @@ def main():
              "Draw Train Stations": True,
              "Draw Roads": True}
     visual_objects = {"Background": background,
-                      "Settlements": settlement_group.settlement_layer,
-                      "Roads": road_group.road_layer,
-                      "Rails": rail_group.rail_layer,
-                      "Train Stations": station_group.stations,
+                      "Settlements": settlement_group.display_layer,
+                      "Roads": road_group.display_layer,
+                      "Rails": rail_group.display_layer,
+                      "Train Stations": station_group.members,
                       "Agents": agents,
                       "Markets": markets}
 
