@@ -372,35 +372,20 @@ class Background(pygame.sprite.Sprite):
         self.sprite.rect = self.sprite.image.get_rect()
 
 
-class SettlementLayer(Background):
+class ObjectLayer(Background):
     def __init__(self, width, height):
         super().__init__(width, height)
         self.sprite.image.fill(colors["Key"])
         self.sprite.image.set_colorkey(colors["Key"])
         self.sprite.image = self.sprite.image.convert_alpha()
 
-    def update(self, settlement):
-        self.sprite.image.blit(settlement.sprite.image, [settlement.x, settlement.y])
+    def update(self, new_item):
+        self.sprite.image.blit(new_item.sprite.image, [new_item.x, new_item.y])
 
 
-class RoadLayer(Background):
+class RailLayer(ObjectLayer):
     def __init__(self, width, height):
         super().__init__(width, height)
-        self.sprite.image.fill(colors["Key"])
-        self.sprite.image.set_colorkey(colors["Key"])
-        self.sprite.image = self.sprite.image.convert_alpha()
-
-    def update(self, road):
-        if road.level >= 1:
-            self.sprite.image.blit(road.sprite.image, [road.x, road.y])
-
-
-class RailLayer(Background):
-    def __init__(self, width, height):
-        super().__init__(width, height)
-        self.sprite.image.fill(colors["Key"])
-        self.sprite.image.set_colorkey(colors["Key"])
-        self.sprite.image = self.sprite.image.convert_alpha()
 
     def update(self, rail):
         self.sprite.image.blit(rail.sprite.image, [0, 0])
@@ -422,7 +407,7 @@ class RailGroup(object):
 class RoadGroup(object):
     def __init__(self, width, height):
         self.roads = []
-        self.road_layer = RoadLayer(width, height)
+        self.road_layer = ObjectLayer(width, height)
 
     def new_road(self, tile):
         new_road = Road(tile.column, tile.row)
@@ -434,7 +419,7 @@ class RoadGroup(object):
 class SettlementGroup(object):
     def __init__(self, width, height):
         self.settlements = []
-        self.settlement_layer = SettlementLayer(width, height)
+        self.settlement_layer = ObjectLayer(width, height)
 
     def new_settlement(self, tile):
         new_settlement = Settlement(tile.column, tile.row)
